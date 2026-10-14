@@ -1,0 +1,11 @@
+node_modules/*
+.env
+.history
+# Local Netlify folder
+.netlify
+storage/*
+.DS_Store
+
+# Real client data: never commit
+SAMPLE.XLSX
+*.xlsx

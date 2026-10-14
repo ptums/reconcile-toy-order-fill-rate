@@ -1,0 +1,10 @@
+[project]
+name = "mock-store"
+version = "0.1.0"
+description = "Mock of a subset of the Shopify Admin GraphQL API, with cost-based rate limiting."
+requires-python = ">=3.12"
+dependencies = ["strawberry-graphql[fastapi]>=0.240", "uvicorn>=0.30"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

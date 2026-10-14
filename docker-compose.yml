@@ -1,0 +1,21 @@
+# Local infrastructure. No real AWS or Shopify account is used.
+services:
+  nats:
+    image: nats:2.10
+    command: ["-js"]          # JetStream: persistent streams, acks, redelivery
+    ports: ["4222:4222", "8222:8222"]
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: reconciler
+      POSTGRES_PASSWORD: reconciler
+      POSTGRES_DB: reconciler
+    ports: ["5432:5432"]
+  dynamodb:
+    image: amazon/dynamodb-local:2.5.2
+    ports: ["8000:8000"]
+  localstack:
+    image: localstack/localstack:3.8   # Check the license terms of newer tags before you upgrade.
+    environment:
+      SERVICES: s3
+    ports: ["4566:4566"]

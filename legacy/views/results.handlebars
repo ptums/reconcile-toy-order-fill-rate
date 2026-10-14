@@ -1,0 +1,50 @@
+<div id="results" class="row my-4">
+    <div class="col-sm-12 col-md-6 offset-md-3">
+        <div id="success"></div>
+        <div id="failures"></div>
+        <div id="failure-results"></div>
+    </div>
+</div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', async function() {
+        const results = await fetch('/order-results')
+            .then(res => res.json())
+            .then(data => data)
+            .catch(err => alert(err));
+        console.log('results');
+        console.log('=========');
+        console.log(results);
+
+        if(results.success.length > 0) {
+            document.getElementById('success').innerHTML = `
+                <div class="alert alert-success mb-4 text-center" role="alert">
+                    ${results.success.length} line items have successfully been updated!
+                </div>
+            `;
+        }
+
+        if(results.failures.length > 0) {
+            document.getElementById('failures').innerHTML = `
+            <div class="alert alert-warning text-center" role="alert">
+                There are ${results.failures.length} line items with warnings or errors.
+            </div>
+            `;
+
+            let html = '';
+            // loop through errors
+            results.failures.forEach((failure) => {
+                const card = `<li class="card m-3 p-2">
+                    <p><strong>order id: </strong>${failure.orderId}</p>
+                    <p><strong>item: </strong>${failure.item}</p>
+                    <p><strong>error: </strong>${failure.error}</p>
+                    <p><strong>action: </strong>${failure.where}</p>
+                </li>`;
+
+                html += card;
+            });
+
+            document.getElementById('failure-results').innerHTML= html;
+        }
+    });
+</script>
