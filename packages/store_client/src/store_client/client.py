@@ -4,6 +4,8 @@ from typing import Any
 
 import httpx
 
+from store_client.models import CalculatedLineItem, CalculatedOrder, Order
+
 
 class StoreError(Exception):
     """The store returned GraphQL errors."""
@@ -70,3 +72,82 @@ class GraphQLStoreClient:
         if errors:
             raise StoreError(errors)
         return body["data"]
+
+    # Order operations. Same GraphQL operations as legacy/utils/regular-queries.js, but with
+    # variables instead of string building, and userErrors raised instead of ignored.
+
+    async def find_order(self, order_name: str) -> Order | None:
+        data = await self.execute(FIND_ORDER, {"query": f"name:{order_name}"})
+        edges = data["orders"]["edges"]
+        if not edges:
+            return None
+        node = edges[0]["node"]
+        return Order(id=node["id"], name=node["name"])
+
+    async def begin_edit(self, order_id: str) -> CalculatedOrder:
+        data = await self.execute(BEGIN_EDIT, {"id": order_id})
+        result = data["orderEditBegin"]
+        raise_user_errors(result)
+        calc = result["calculatedOrder"]
+        return CalculatedOrder(
+            id=calc["id"],
+            order_name=calc["originalOrder"]["name"],
+            line_items=[
+                CalculatedLineItem(id=e["node"]["id"], sku=e["node"]["sku"], quantity=e["node"]["quantity"])
+                for e in calc["lineItems"]["edges"]
+            ],
+        )
+
+    async def set_quantity(self, calculated_order_id: str, line_item_id: str, quantity: int) -> None:
+        data = await self.execute(
+            SET_QUANTITY, {"id": calculated_order_id, "lineItemId": line_item_id, "quantity": quantity}
+        )
+        raise_user_errors(data["orderEditSetQuantity"])
+
+    async def commit_edit(self, calculated_order_id: str) -> None:
+        data = await self.execute(COMMIT_EDIT, {"id": calculated_order_id})
+        raise_user_errors(data["orderEditCommit"])
+
+
+def raise_user_errors(result: dict[str, Any]) -> None:
+    """Mutations report business errors in userErrors with HTTP 200. The 2021 code ignored them."""
+    if result.get("userErrors"):
+        raise StoreError(result["userErrors"])
+
+
+FIND_ORDER = """
+query FindOrder($query: String!) {
+  orders(first: 1, query: $query) { edges { node { id name } } }
+}
+"""
+
+BEGIN_EDIT = """
+mutation BeginEdit($id: ID!) {
+  orderEditBegin(id: $id) {
+    calculatedOrder {
+      id
+      originalOrder { name }
+      lineItems(first: 250) { edges { node { id sku quantity } } }
+    }
+    userErrors { field message }
+  }
+}
+"""
+
+SET_QUANTITY = """
+mutation SetQuantity($id: ID!, $lineItemId: ID!, $quantity: Int!) {
+  orderEditSetQuantity(id: $id, lineItemId: $lineItemId, quantity: $quantity) {
+    calculatedOrder { id }
+    userErrors { field message }
+  }
+}
+"""
+
+COMMIT_EDIT = """
+mutation CommitEdit($id: ID!) {
+  orderEditCommit(id: $id) {
+    order { id }
+    userErrors { field message }
+  }
+}
+"""

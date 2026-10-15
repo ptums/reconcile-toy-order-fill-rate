@@ -259,3 +259,17 @@ Lesson 2, part 1. Added 2026-10-13.
 **Simple explanation (high school level).** A model is a form: "this record has a name and a quantity." A protocol is a job description: "whoever does this job must be able to run a query." The job description does not care who you are, only what you can do.
 
 **Interview answer.** "The worker depends on a Protocol, so the mock store, real Shopify and a test fake are all interchangeable without inheritance. Models describe data; protocols describe behavior."
+
+## Blocking the event loop: missed heartbeats and redelivery
+
+Lesson 2, part 1. Added 2026-10-14.
+
+**Concept.** `asyncio` runs on one event loop, like Node.js. A blocking call (`requests.post`, `time.sleep`) stops the whole loop. Nothing else runs: not other messages, not the NATS client's heartbeats (PING/PONG).
+
+**What happens.** Peter's answer: the heartbeats pause, and the received messages wait until the call ends. Correct. The next step is the risk: if the pause is longer than the server's limits, NATS treats the worker as gone. JetStream then redelivers the unacknowledged messages, after `ack_wait`, to another worker. When the first worker wakes up, it also finishes them. The same row is processed twice. This is why the worker must be idempotent (diff before write), and why I/O must use `await`.
+
+**TypeScript comparison.** The same as `fs.readFileSync` or a long `while` loop in Node: the event loop stops, and timers and sockets wait.
+
+**Simple explanation (high school level).** Peter's picture: a conveyor belt where toys go into boxes with labels. If one station stops for one toy, the whole belt stops. Add a supervisor who checks every few seconds that each station is awake. If a station freezes, the supervisor gives its toys to another station. When the frozen station wakes up, it boxes the same toys again. Now some toys have two boxes.
+
+**Interview answer.** "A blocking call in an async worker stops the event loop, so heartbeats stop. The broker thinks the worker is dead and redelivers its unacked messages. That is at-least-once delivery in action, so the handler must be idempotent and all I/O must be non-blocking."

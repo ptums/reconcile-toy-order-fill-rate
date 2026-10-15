@@ -6,9 +6,13 @@ GraphQL API. To use real Shopify, change STORE_GRAPHQL_URL and STORE_TOKEN only.
 """
 
 from store_client.client import GraphQLStoreClient, StoreConfig, StoreError, ThrottledError, ThrottleStatus
+from store_client.models import CalculatedLineItem, CalculatedOrder, Order
 from store_client.protocol import StoreClient
 
 __all__ = [
+    "CalculatedLineItem",
+    "CalculatedOrder",
+    "Order",
     "GraphQLStoreClient",
     "StoreClient",
     "StoreConfig",
