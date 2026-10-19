@@ -106,7 +106,7 @@ Lesson 1, part 5. Added 2026-10-13.
 
 **Concept.** A producer puts messages on a queue. A consumer takes messages from the queue and does the work. A worker is a background program that runs all the time; it is usually a consumer. "Producer" and "consumer" are roles for one queue, so one program can have both roles.
 
-**In this project.** The upload API is the producer: it publishes one message for each row. The Python worker is the consumer of `orders.edit.*`. When a row fails, the worker publishes to `orders.dlq`, so for that subject the worker is a producer.
+**In this project.** The upload API is the producer: it publishes one message for each row. The worker is the consumer of `orders.edit.*`. When a row fails, the worker publishes to `orders.dlq`, so for that subject the worker is a producer.
 
 **Simple explanation (high school level).** In a restaurant, the server puts order tickets on the kitchen rail (producer). The cooks take the tickets and cook (consumers, workers).
 
@@ -248,27 +248,25 @@ Lesson 1, part 6. Added 2026-10-13.
 
 **Interview answer.** "When the downstream API is the bottleneck, scaling out makes it worse. We cap concurrency at what the rate limit supports, put a shared token bucket in front of the API, add jitter to retries, and round-robin across jobs for fairness."
 
-## Protocol vs model, and dependency inversion
+## Interface vs model, and dependency inversion
 
 Lesson 2, part 1. Added 2026-10-13.
 
-**Concept.** A model describes data: what an object has (fields). A protocol describes behavior: what an object can do (methods). A Python `typing.Protocol` uses structural typing: a class matches if its methods match, with no inheritance. The type checker (Pyright or mypy) checks it; Python does not check it at runtime. An abstract base class (ABC) is nominal: a class must inherit from it.
+**Concept.** A model describes data: what an object has (fields). An interface describes behavior: what an object can do (methods). A TypeScript `interface` uses structural typing, like a Python `Protocol`: an object matches if its methods match, with no `implements` and no inheritance. TypeScript interfaces are structural by default. The type checker (`tsc`) checks them, and the compiler erases them, so they do not exist at runtime: you cannot use `instanceof` with an interface. A class is different: it exists at runtime, it can hold code, and `instanceof` works with it. A class can say `implements StoreClient` to ask the checker to compare it with the interface, but that is optional.
 
-**In this project.** `StoreClient` (`packages/store_client/src/store_client/protocol.py`) is a protocol: anything with `execute()`. `ThrottleStatus` is a model (a dataclass). The worker depends on `StoreClient`, not on httpx or Shopify. Tests pass a fake; production passes `GraphQLStoreClient`. This is dependency inversion: code depends on an abstraction, not on a concrete class.
+**In this project.** `StoreClient` (`packages/store-client/src/store-client.ts`) is an interface: anything with `execute()` and the order operations. `Order` and `CalculatedOrder` are models (interfaces with `readonly` fields). `ThrottleStatus` is a model with one method, so it is a class. The worker depends on `StoreClient`, not on `fetch` or Shopify. Tests pass a fake; production passes `GraphQLStoreClient`. This is dependency inversion: code depends on an abstraction, not on a concrete class.
 
-**Simple explanation (high school level).** A model is a form: "this record has a name and a quantity." A protocol is a job description: "whoever does this job must be able to run a query." The job description does not care who you are, only what you can do.
+**Simple explanation (high school level).** A model is a form: "this record has a name and a quantity." An interface is a job description: "whoever does this job must be able to run a query." The job description does not care who you are, only what you can do.
 
-**Interview answer.** "The worker depends on a Protocol, so the mock store, real Shopify and a test fake are all interchangeable without inheritance. Models describe data; protocols describe behavior."
+**Interview answer.** "The worker depends on an interface, so the mock store, real Shopify and a test fake are all interchangeable without inheritance. TypeScript interfaces are structural and erased at runtime. Models describe data; interfaces describe behavior."
 
 ## Blocking the event loop: missed heartbeats and redelivery
 
 Lesson 2, part 1. Added 2026-10-14.
 
-**Concept.** `asyncio` runs on one event loop, like Node.js. A blocking call (`requests.post`, `time.sleep`) stops the whole loop. Nothing else runs: not other messages, not the NATS client's heartbeats (PING/PONG).
+**Concept.** Node.js runs your code on one event loop. A blocking call stops the whole loop: for example `fs.readFileSync` on a large file, a CPU-heavy `for` loop, or a sync crypto call such as `crypto.pbkdf2Sync`. Nothing else runs: not other messages, not timers, not the NATS client's heartbeats (PING/PONG).
 
 **What happens.** Peter's answer: the heartbeats pause, and the received messages wait until the call ends. Correct. The next step is the risk: if the pause is longer than the server's limits, NATS treats the worker as gone. JetStream then redelivers the unacknowledged messages, after `ack_wait`, to another worker. When the first worker wakes up, it also finishes them. The same row is processed twice. This is why the worker must be idempotent (diff before write), and why I/O must use `await`.
-
-**TypeScript comparison.** The same as `fs.readFileSync` or a long `while` loop in Node: the event loop stops, and timers and sockets wait.
 
 **Simple explanation (high school level).** Peter's picture: a conveyor belt where toys go into boxes with labels. If one station stops for one toy, the whole belt stops. Add a supervisor who checks every few seconds that each station is awake. If a station freezes, the supervisor gives its toys to another station. When the frozen station wakes up, it boxes the same toys again. Now some toys have two boxes.
 

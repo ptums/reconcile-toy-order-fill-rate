@@ -28,7 +28,7 @@ Input: the source data is a supplier fill-rate report. It shows how many pieces 
 | Item Desc | Description |
 | Pieces Shipped | Final Qty |
 
-The test data is `fixtures/sample-orders.anon.csv`. `tools/anonymize_sample.py` makes it from a real report. The real report is not in the repository.
+The test data is `fixtures/sample-orders.anon.csv`. `tools/anonymize-sample.ts` makes it from a real report. The real report is not in the repository.
 
 Stack: Node.js, Express, Handlebars, MongoDB (Mongoose 5), node-fetch 2, csv-parse 4. It was hosted on a DigitalOcean server. There are 82 commits from March to May 2021.
 
@@ -83,8 +83,8 @@ Findings come from reading the code. I did not run the tool. I did not run the t
 
 | Area | 2021 | Modernized |
 |---|---|---|
-| Upload | Express route that does all the work | Python API stores the file in S3 (LocalStack) and returns a job ID at once |
-| Work | Timers in one process | NATS: one message for each row, partitioned by order ID; Python workers that scale out |
+| Upload | Express route that does all the work | TypeScript API stores the file in S3 (LocalStack) and returns a job ID at once |
+| Work | Timers in one process | NATS: one message for each row, partitioned by order ID; TypeScript workers that scale out |
 | API access | Hard-coded Shopify calls | One adapter. Mock GraphQL server by default; real Shopify Admin API by config |
 | Rate limits | Fixed waits | Read `throttleStatus` and back off |
 | State | MongoDB, cleared each run | DynamoDB Local for job status and idempotency keys; Postgres for results (decide in an ADR) |

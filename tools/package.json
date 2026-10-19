@@ -1,0 +1,15 @@
+{
+  "name": "@reconcile/tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One-off scripts, for example the sample anonymizer.",
+  "type": "module",
+  "scripts": {
+    "anonymize": "tsx anonymize-sample.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "fflate": "0.8.2"
+  }
+}

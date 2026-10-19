@@ -1,0 +1,17 @@
+{
+  "name": "@reconcile/queue",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One Queue interface with adapters for NATS JetStream (local) and SQS FIFO (AWS).",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "3.1146.0",
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/transport-node": "3.4.0"
+  }
+}

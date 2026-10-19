@@ -1,0 +1,12 @@
+{
+  "name": "@reconcile/store-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adapter for the store's GraphQL Admin API (the mock or real Shopify).",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

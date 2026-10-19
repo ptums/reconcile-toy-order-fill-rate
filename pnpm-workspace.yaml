@@ -1,0 +1,9 @@
+# legacy/ is not a workspace member: it stays the unchanged 2021 code.
+packages:
+  - "packages/*"
+  - "services/*"
+  - "tools"
+
+# esbuild (used by tsx and vitest) needs its install script.
+onlyBuiltDependencies:
+  - esbuild
