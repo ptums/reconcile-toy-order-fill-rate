@@ -1,3 +1,7 @@
+# Reconciler (TWS-77)
+
+Before any work, read `PROCESS.md`, `REQUIREMENTS.md` ("Where we stopped"), `LEARNINGS.md` and `SELF_LEARNING.md`, and follow them.
+
 <!-- BEGIN AWS Agent Toolkit rules -->
 # AWS Guidance for the new AWS experience
 
