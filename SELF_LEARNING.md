@@ -13,6 +13,7 @@ Mistakes Claude made in this project, and the rule that prevents each one. Read 
 7. **Keep pieces small.** A piece has at most 3 steps. If a piece needs more, split it.
 8. **Do not repeat what Peter already knows.** TypeScript and the frontend are known skills. Explain the system design idea, not the syntax.
 9. **Document each question.** Every question from Peter goes into `LEARNINGS.md` at once, not at the end of the session.
+10. **Give a refactor as whole files or exact before/after blocks.** Piece 9a (move the code into `createApp()`) packed 4 edits into one bullet, with no line numbers. Peter pasted the steps into the file, and the edits got mixed up. For a move or a wrap, give the full new file, or one before/after block for each edit. (2026-10-19)
 
 ## Ideas to try
 

@@ -88,3 +88,22 @@ If both students circle the same line, the last one to hand in the sheet wins. T
 In the code: the photocopy is `session.lineItems`, the circles are `session.changed`, and the teacher is `orderEditCommit`. Sending only what changed (the difference, not the whole thing) is called a **delta** or a **patch**. HTTP `PATCH` and `git diff` use the same idea.
 
 **Interview answer.** "Each edit session works on a snapshot and records which lines it touched; commit applies only those deltas, so concurrent sessions on different lines don't overwrite each other, and conflicts on the same line resolve as last-writer-wins."
+
+### Q6. In the leaky bucket, if 38 points are left after a second passes, does it go back to 40? (Part 1, piece 8)
+
+Asked 2026-10-19, before piece 8.
+
+No. It goes **up to 88** (38 + 50). The bucket does not reset each second. It refills all the time, at 50 points per second, up to the maximum of 1,000. Unused points carry over until the bucket is full.
+
+Two different designs:
+
+| | Fixed window | Leaky bucket (Shopify) |
+|---|---|---|
+| Rule | "50 points per second." A new second resets the count | "1,000 points, refilled at 50 per second" |
+| Unused points | Lost at the end of the second | Kept, up to 1,000 |
+| Bursts | Max 50 at once | Up to 1,000 at once, after a quiet period |
+| Weak point | A client can send 50 at 0.99 s and 50 at 1.01 s: 100 in 0.02 s | None at the window edge |
+
+How the server knows the time: it does not run a timer. It saves `available` and `lastUpdate` (a timestamp) for each bucket. On each request, it calculates the refill from the time that passed: `available = min(1000, available + secondsSince(lastUpdate) * 50)`. This is called **lazy refill**. Peter's idea of a timestamp and the system clock is this method, on the server side.
+
+**Interview answer.** "A leaky or token bucket refills continuously and caps at a maximum, so it allows bursts after idle time without the edge spikes of a fixed window. You implement it lazily: store the level and a timestamp, and compute the refill on each request."

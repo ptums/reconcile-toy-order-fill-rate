@@ -8,7 +8,7 @@ Linear ticket: TWS-77.
 
 ## Status
 
-Part 1 (the mock store) is in progress. Pieces 1 to 7 are done: queries, edit sessions and userErrors. Next: the leaky bucket (rate limiting). See `REQUIREMENTS.md` → "Where we stopped".
+Part 1 (the mock store) is in progress. Pieces 1 to 8 are done: queries, edit sessions, userErrors and the cost-based leaky bucket. Next: tests with Vitest. See `REQUIREMENTS.md` → "Where we stopped".
 
 ## Build plan
 
@@ -71,7 +71,10 @@ The mock store loads its orders from `fixtures/sample-orders.anon.csv`: 2 orders
 
 | Path | What |
 |---|---|
-| `mock-store/server.ts` | HTTP server, GraphQL schema and resolvers |
+| `mock-store/server.ts` | HTTP server on port 8001, with `GET /health` |
+| `mock-store/app.ts` | `createApp()`: the GraphQL schema, the resolvers and the cost plugin, with new state for each call |
+| `mock-store/bucket.ts` | The leaky bucket: lazy refill, one bucket for each access token |
+| `mock-store/cost.ts` | The query cost: 10 for a mutation, plus `first` for each connection |
 | `mock-store/store.ts` | Loads the orders from the CSV report |
 | `fixtures/` | The anonymized sample report. Do not change |
 | `legacy/` | The 2021 Node.js tool, for reference. Do not change |
