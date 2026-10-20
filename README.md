@@ -8,7 +8,7 @@ Linear ticket: TWS-77.
 
 ## Status
 
-Part 1 (the mock store) is in progress. Pieces 1 to 5 are done. Next: edit sessions. See `REQUIREMENTS.md` → "Where we stopped".
+Part 1 (the mock store) is in progress. Pieces 1 to 7 are done: queries, edit sessions and userErrors. Next: the leaky bucket (rate limiting). See `REQUIREMENTS.md` → "Where we stopped".
 
 ## Build plan
 

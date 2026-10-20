@@ -5,11 +5,18 @@ export interface LineItem {
   sku: string;
   quantity: number;
 }
-export interface Order {
+export type Order = {
   id: string;
   name: string;
   lineItems: LineItem[];
-}
+};
+
+export type Session = {
+  id: string;
+  orderId: string;
+  lineItems: LineItem[];
+  changed: Set<string>;
+};
 
 const SEED = new URL("../fixtures/sample-orders.anon.csv", import.meta.url);
 

@@ -34,9 +34,9 @@ A GraphQL server that copies the shape of Shopify's Admin API. Stack: `node:http
 | 3 | GraphQL Yoga with `shop { name }` | Done |
 | 4 | `store.ts`: load the orders from the report (`loadOrders`) | Done |
 | 5 | `orders(first, query: "name:1001")` and `Order.lineItems(first)`, in the connection shape (`edges { node }`). No `query` returns all orders up to `first` | Done |
-| 6 | Edit sessions: `orderEditBegin`, `orderEditSetQuantity`, `orderEditCommit` | **Next** |
-| 7 | `userErrors` for bad input: unknown order, unknown session, line not in the session, negative quantity. HTTP 200, no change (Peter's rule: a bad `commit` returns a userError and changes nothing) | To do |
-| 8 | Cost-based leaky bucket: query cost, `extensions.cost.throttleStatus`, `THROTTLED` error. One bucket for each access token | To do |
+| 6 | Edit sessions: `orderEditBegin`, `orderEditSetQuantity`, `orderEditCommit`. Each session edits a copy and tracks its changed lines; commit applies only those (last commit wins, per line) | Done |
+| 7 | `userErrors` for bad input: unknown order, unknown session, line not in the session, negative quantity. HTTP 200, no change (Peter's rule: a bad `commit` returns a userError and changes nothing). Peter's rule (2026-10-19): `orderEditSetQuantity` rejects a bad line at once, so the commit applies the good lines; the CLI reports the rejected lines at the end, like the legacy `createFailure` | Done |
+| 8 | Cost-based leaky bucket: query cost, `extensions.cost.throttleStatus`, `THROTTLED` error. One bucket for each access token | **Next** |
 | 9 | Tests with Vitest | To do |
 
 Shopify facts checked on shopify.dev (2026-10-18): the example bucket is `maximumAvailable 1000`, `restoreRate 50`; a mutation costs 10; an object costs 1; a connection costs by `first`; one query can't cost more than 1,000.
@@ -64,4 +64,4 @@ Shopify facts checked on shopify.dev (2026-10-18): the example bucket is `maximu
 
 ## Where we stopped
 
-Part 1, piece 5 is done and verified (2026-10-18): `orders(first: 5)` returns #1001 and #1002, and `orders(query: "name:1001")` returns #1001 with its line items. Next: **part 1, piece 6, edit sessions.**
+Part 1, pieces 6 and 7 are done and verified (2026-10-19). Edit sessions work (begin, set quantity, commit), and 2 sessions on different lines of #1001 both apply (5 and 9). Bad input returns `userErrors` and changes nothing: an unknown order, an unknown session, a line not in the session, a negative quantity. A second commit of the same session gives a userError (the idempotency problem, for part 3). Next: **part 1, piece 8, the leaky bucket.**
