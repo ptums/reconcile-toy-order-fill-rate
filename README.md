@@ -8,13 +8,13 @@ Linear ticket: TWS-77.
 
 ## Status
 
-Part 1 (the mock store) is in progress. Pieces 1 to 8 are done: queries, edit sessions, userErrors and the cost-based leaky bucket. Next: tests with Vitest. See `REQUIREMENTS.md` → "Where we stopped".
+Part 1 (the mock store) is done: queries, edit sessions, userErrors, the cost-based leaky bucket, and 12 Vitest tests. Next: part 2, the queue package. See `REQUIREMENTS.md` → "Where we stopped".
 
 ## Build plan
 
 | Part | What | Status |
 |---|---|---|
-| 1 | Mock API server (`mock-store/`): GraphQL Yoga on `node:http`, in the shape of the Shopify Admin API | In progress |
+| 1 | Mock API server (`mock-store/`): GraphQL Yoga on `node:http`, in the shape of the Shopify Admin API | Done |
 | 2 | Queue package: a `Queue` interface with a NATS JetStream adapter (local) and an SQS FIFO adapter (AWS) | To do |
 | 3 | CLI client: `reconcile.ts --file=<report>.csv` | To do |
 | 4 | AWS infrastructure: Lambda, SQS FIFO, DynamoDB on-demand, S3. AWS CLI only, $5 a month cap | Budget done |
@@ -38,6 +38,7 @@ The mock store starts on port 8001 (set `PORT` to change it).
 
 - Health check: `curl http://localhost:8001/health` → `{"status":"ok"}`
 - GraphiQL: http://localhost:8001/graphql
+- Tests: `pnpm test` (Vitest, no server needed)
 
 Check types:
 
@@ -75,6 +76,7 @@ The mock store loads its orders from `fixtures/sample-orders.anon.csv`: 2 orders
 | `mock-store/app.ts` | `createApp()`: the GraphQL schema, the resolvers and the cost plugin, with new state for each call |
 | `mock-store/bucket.ts` | The leaky bucket: lazy refill, one bucket for each access token |
 | `mock-store/cost.ts` | The query cost: 10 for a mutation, plus `first` for each connection |
+| `mock-store/*.test.ts` | Vitest tests. Each test calls `createApp()` and sends requests with `app.fetch`, with no port. Bucket tests pass a fixed `now` |
 | `mock-store/store.ts` | Loads the orders from the CSV report |
 | `fixtures/` | The anonymized sample report. Do not change |
 | `legacy/` | The 2021 Node.js tool, for reference. Do not change |

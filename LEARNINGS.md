@@ -107,3 +107,13 @@ Two different designs:
 How the server knows the time: it does not run a timer. It saves `available` and `lastUpdate` (a timestamp) for each bucket. On each request, it calculates the refill from the time that passed: `available = min(1000, available + secondsSince(lastUpdate) * 50)`. This is called **lazy refill**. Peter's idea of a timestamp and the system clock is this method, on the server side.
 
 **Interview answer.** "A leaky or token bucket refills continuously and caps at a maximum, so it allows bursts after idle time without the edge spikes of a fixed window. You implement it lazily: store the level and a timestamp, and compute the refill on each request."
+
+### Q7. If a test uses the current time, doesn't each run get a fresh second? (Part 1, piece 9c)
+
+Asked 2026-10-21, before piece 9c.
+
+Yes, and that is the problem. With `Date.now()`, the test does not control the time. A test that checks "50 points after 1 second" must then really wait 1 second, and the result depends on how fast the computer is. A slow run gets 52 points and fails. This is a **flaky test**: it passes and fails with no change to the code. It is also slow.
+
+The fix is **clock injection**. `refill` and `take` take `now` as a parameter, with `Date.now()` as the default. The server passes nothing, so it uses the real clock. A test passes plain numbers: `take("t", 1000, 0)` empties the bucket at time 0, and `refill("t", 1000)` is "1 second later". The test controls time, so the result is the same on every run. Vitest also has fake timers (`vi.useFakeTimers()`), but a parameter is simpler and has no global state.
+
+**Interview answer.** "I inject the clock as a parameter, so tests pass fixed timestamps. Tests that read the real clock are slow and flaky, and time-dependent logic should be deterministic under test."

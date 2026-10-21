@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev:mock": "tsx watch mock-store/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run mock-store"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +15,8 @@
   "devDependencies": {
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "graphql": "^17.0.2",
