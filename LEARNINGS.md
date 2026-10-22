@@ -197,3 +197,35 @@ NATS uses 2 ports. **4222** is the client port: the code connects there with the
 - `/varz`: the server settings and stats
 
 The monitoring port has no login, so it stays on localhost and is never open to the internet. Production systems read the same pages with Prometheus to make dashboards.
+
+### Q13. Can part 4 run on local AWS copies, with no AWS sign-up? (Part 4, asked before part 3)
+
+Asked 2026-10-21, before part 3.
+
+Yes, for most of it. Each AWS service has a local copy that runs in Docker:
+
+- **DynamoDB:** DynamoDB Local, from AWS. The same API, on the laptop.
+- **SQS (also FIFO):** ElasticMQ, an open-source server with the SQS API. The AWS SDK points to it with an `endpoint` setting.
+- **S3:** S3Mock or MinIO. Both have the S3 API.
+- **Lambda:** AWS SAM CLI (`sam local invoke`) runs the function in a Docker container.
+- **All in one:** LocalStack copies many services, but from version 2026.03.0 it needs a LocalStack auth token. The free Hobby plan is for non-commercial use. That is a LocalStack account, not an AWS account.
+
+The code does not change between local and real AWS. Only the `endpoint` and the credentials change (the adapter pattern again). The limit: a local copy does not test IAM permissions, real limits or real costs. Interview answer: "I develop against local emulators and run 1 deploy to real AWS to prove IAM and the infrastructure."
+
+This project already has an AWS profile (`reconciler`) and the $5 budget, so the real deploy is still possible at the end.
+
+### Q14. What does `for (;;)` mean? Does it run all the time? (Part 3, piece 19)
+
+Asked 2026-10-21, at piece 19.
+
+`for (;;)` is a loop with no start, no condition and no step, so it never stops by itself. It is the same as `while (true)`. The loop body must leave with `return` or `throw`.
+
+In `withThrottle`, each pass does 1 of 3 things:
+
+1. The store answers with no THROTTLED error: `return` the answer. The loop ends.
+2. The query costs more than a full bucket: `throw`. Waiting can never fix it, so the loop ends.
+3. THROTTLED: `sleep` for (cost − available) ÷ restoreRate seconds, then go to the top and send again.
+
+It does not "run all the time". It sleeps between tries, so it uses no CPU while it waits. Usually the second try works. If another client with the same token used the points in the meantime, it waits again.
+
+A correction to the first idea: `withThrottle` does not throttle. The **store** throttles (the leaky bucket from piece 8). `withThrottle` reacts: it reads the bucket numbers in the THROTTLED answer and waits only as long as necessary. Interview answer: "The server enforces the limit; the client respects it with a calculated backoff, not a fixed sleep."

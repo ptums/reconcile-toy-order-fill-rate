@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "dev:mock": "tsx watch mock-store/server.ts",
-    "test": "vitest run mock-store"
+    "test": "vitest run mock-store cli",
+    "reconcile": "tsx cli/reconcile.ts"
   },
   "keywords": [],
   "author": "",

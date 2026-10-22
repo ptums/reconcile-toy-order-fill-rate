@@ -31,7 +31,7 @@ export function loadOrders(): Order[] {
 
   for (const row of rows) {
     const po = row[col("PO No.")];
-    if (!po) continue; // the 2 total rows at the end have no PO
+    if (!po || !row[col("Item")]) continue;
     const lines = byPo.get(po) ?? [];
     lines.push({
       id: `gid://shopify/LineItem/${po}${lines.length + 1}`,

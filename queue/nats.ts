@@ -6,7 +6,7 @@ import {
   RetentionPolicy,
   type JetStreamClient,
 } from "@nats-io/jetstream";
-import type { Delivery, Queue, RowMessage } from "./queue.ts";
+import type { Delivery, Queue, OrderMessage } from "./queue.ts";
 
 const STREAM = "ROWS";
 const CONSUMER = "workers";
@@ -51,7 +51,7 @@ export class NatsQueue implements Queue {
     return new NatsQueue(nc, jetstream(nc));
   }
 
-  async publish(message: RowMessage): Promise<void> {
+  async publish(message: OrderMessage): Promise<void> {
     // msgID: NATS drops a second publish with the same ID (2-minute window).
     await this.js.publish(
       subjectFor(message.orderId),
@@ -80,12 +80,12 @@ export class NatsQueue implements Queue {
     // The loop ends when close() drains the connection.
     for await (const m of messages) {
       await handler({
-        message: m.json<RowMessage>(),
+        message: m.json<OrderMessage>(),
         attempt: m.info.deliveryCount,
         ack: async () => m.ack(),
         nak: async (delayMs) => m.nak(delayMs),
         deadLetter: async (reason) => {
-          const message = m.json<RowMessage>();
+          const message = m.json<OrderMessage>();
           await this.js.publish(
             "dead.rows",
             JSON.stringify({ ...message, reason }),
