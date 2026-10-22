@@ -9,5 +9,5 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["mock-store"]
+  "include": ["mock-store", "queue"]
 }

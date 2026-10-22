@@ -41,12 +41,31 @@ A GraphQL server that copies the shape of Shopify's Admin API. Stack: `node:http
 
 Shopify facts checked on shopify.dev (2026-10-18): the example bucket is `maximumAvailable 1000`, `restoreRate 50`; a mutation costs 10; an object costs 1; a connection costs by `first`; one query can't cost more than 1,000.
 
-### Part 2. Queue package (NATS)
+### Part 2. Queue package (`queue/`)
 
-- A `Queue` interface, and a NATS JetStream adapter. Local NATS runs in Docker.
-- One message for each report row. Partition by order ID, so one order has one writer.
-- At-least-once delivery, ack after the work, a dead-letter subject for failed rows.
-- On AWS, the same interface gets an SQS FIFO adapter (message group = order ID).
+A `Queue` interface (`queue.ts`) and a NATS JetStream adapter (`nats.ts`). Local NATS 2.11 runs in Docker (`docker compose up -d`): clients on port 4222, monitoring on port 8222. On AWS, the same interface gets an SQS FIFO adapter (part 4).
+
+| Piece | What | Status |
+|---|---|---|
+| 10 | NATS JetStream in Docker (`docker-compose.yml`). `/healthz` returns `ok` | Done |
+| 11 | The `Queue` interface: `RowMessage`, `Delivery` (`ack`, `nak`, `deadLetter`, `attempt`), `publish`, `consume`, `close`. Types only | Done |
+| 12 | The NATS adapter. 12a: connect and publish (stream `ROWS`, the row key as `msgID`, so a second publish is dropped). 12b: consume and ack (the ack deletes the message) | Done |
+| 13 | `nak(delayMs)`: a failed row comes back after the delay. `attempt` is the delivery count | Done |
+| 14 | Dead letters: stream `DEAD` on `dead.>`. `deadLetter(reason)` publishes the row with the reason to `dead.rows`, then acks the original | Done |
+| 15 | 1 writer per order: 3 partitions (`rows.<order % 3>.<order>`), 1 consumer per partition with `max_ack_pending: 1`. Rows for 1 order run in sequence; different orders run in parallel | Done |
+
+Decisions (2026-10-20 to 2026-10-21):
+
+- At-least-once delivery. The worker acks after the commit. An ack before the commit is at-most-once, and a crash loses the row.
+- A message carries the absolute quantity (Pieces Shipped), never "add" or "remove", so a second delivery gives the same result (idempotency).
+- One message for each report row, and each row is its own edit session. The dedup key is the row (`<report file>:<row number>`), not the session ID. Batching rows per order is possible in part 3.
+- Peter: WorkQueue retention (choice B). An ack deletes the message, so a row is not done again.
+- Peter: the dead letter keeps its messages (a log), for debugging.
+- Peter: a permanent error (a `userError`) goes to the dead letter at once. A transient error (`THROTTLED`) gets a delayed retry, up to `MAX_ATTEMPTS` = 5, then goes to the dead letter. The retry delay is (cost − available) ÷ 50 seconds.
+- Peter: partition by order, like the SQS FIFO `MessageGroupId` (choice B). A delayed `nak` keeps the partition's 1 place, so a newer row for the same order cannot go first.
+- SQS FIFO mapping: `MessageGroupId` = the order ID, `MessageDeduplicationId` = the row key, `DeleteMessage` = ack, the visibility timeout = redelivery, a DLQ with `maxReceiveCount` = the dead letter.
+
+Try scripts (`queue/try*.ts`, run with `npx tsx`): `try.ts` publishes, `try-consume.ts` acks, `try-retry.ts` naks with a delay, `try-dead.ts` sends rows to the dead letter, `try-order.ts` shows the per-order sequence. Check the streams: `curl -s "http://localhost:8222/jsz?streams=true"`. If you change the consumers, reset NATS with `docker compose down -v` (a WorkQueue stream does not allow overlapping consumers).
 
 ### Part 3. CLI client
 
@@ -64,4 +83,4 @@ Shopify facts checked on shopify.dev (2026-10-18): the example bucket is `maximu
 
 ## Where we stopped
 
-Part 1, pieces 6 and 7 are done and verified (2026-10-19). Edit sessions work (begin, set quantity, commit), and 2 sessions on different lines of #1001 both apply (5 and 9). Bad input returns `userErrors` and changes nothing: an unknown order, an unknown session, a line not in the session, a negative quantity. A second commit of the same session gives a userError (the idempotency problem, for part 3). Piece 8 is done and verified (2026-10-19): each response has `extensions.cost` with `throttleStatus`, and a request that costs more than the bucket holds gets `THROTTLED` (HTTP 200, `actualQueryCost: null`). Piece 9a is done: the GraphQL app moved to `mock-store/app.ts` as `createApp()`, and `server.ts` only serves it. Piece 9 is done (2026-10-21): 12 Vitest tests pass with `pnpm test`, and part 1 is complete. Next: **part 2, the queue package (NATS)**.
+Part 1, pieces 6 and 7 are done and verified (2026-10-19). Edit sessions work (begin, set quantity, commit), and 2 sessions on different lines of #1001 both apply (5 and 9). Bad input returns `userErrors` and changes nothing: an unknown order, an unknown session, a line not in the session, a negative quantity. A second commit of the same session gives a userError (the idempotency problem, for part 3). Piece 8 is done and verified (2026-10-19): each response has `extensions.cost` with `throttleStatus`, and a request that costs more than the bucket holds gets `THROTTLED` (HTTP 200, `actualQueryCost: null`). Piece 9a is done: the GraphQL app moved to `mock-store/app.ts` as `createApp()`, and `server.ts` only serves it. Piece 9 is done (2026-10-21): 12 Vitest tests pass with `pnpm test`, and part 1 is complete. Part 2 is done and verified (2026-10-21): pieces 10 to 15, run by Peter against local NATS. A throttled row retries 5 times and goes to the dead letter, a bad row goes there at once, and rows for order 1001 run in sequence while order 1002 runs in parallel. Next: **part 3, the CLI client**.

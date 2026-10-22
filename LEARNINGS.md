@@ -117,3 +117,83 @@ Yes, and that is the problem. With `Date.now()`, the test does not control the t
 The fix is **clock injection**. `refill` and `take` take `now` as a parameter, with `Date.now()` as the default. The server passes nothing, so it uses the real clock. A test passes plain numbers: `take("t", 1000, 0)` empties the bucket at time 0, and `refill("t", 1000)` is "1 second later". The test controls time, so the result is the same on every run. Vitest also has fake timers (`vi.useFakeTimers()`), but a parameter is simpler and has no global state.
 
 **Interview answer.** "I inject the clock as a parameter, so tests pass fixed timestamps. Tests that read the real clock are slow and flaky, and time-dependent logic should be deterministic under test."
+
+### Q8. Shouldn't the worker do 1 edit at a time? (Part 2, before piece 10)
+
+Asked 2026-10-21, before piece 10.
+
+Yes, for each order. Piece 15 makes sure that only 1 worker edits a given order at a time, so 2 edits to one order never overlap. But "1 at a time" does not stop duplicates. A duplicate comes from **redelivery**, not from 2 workers at the same time:
+
+1. The worker gets "set line 10011 to 5".
+2. The worker commits the edit. The order now has 5.
+3. The worker crashes before it sends the ack.
+4. NATS did not get an ack, so it sends the same message again later.
+
+The second delivery comes after the first is finished, one at a time, and it is still a duplicate. This is why at-least-once delivery means that the work must be safe to do 2 times. This property is called **idempotency**.
+
+**Interview answer.** "Serializing work per key prevents concurrent conflicts, but not duplicates. At-least-once delivery redelivers any message whose ack was lost, so the handler itself must be idempotent."
+
+### Q9. What is SQS FIFO, and what does "it implements the interface on AWS" mean? (Part 2, before piece 11)
+
+Asked 2026-10-21, before piece 11.
+
+**SQS** (Simple Queue Service) is the managed queue on AWS. AWS runs the servers, and you pay for each request. A **FIFO** queue (first in, first out) keeps the order of messages in each **message group**, and it removes duplicate sends with the same deduplication ID within 5 minutes.
+
+"Implements the interface" means that we write 2 classes with the same methods: `NatsQueue` for local work and `SqsQueue` for AWS. The CLI and the worker call `queue.publish(...)` and do not know which one runs. That is the adapter pattern.
+
+The same ideas in each system:
+
+| Idea | NATS JetStream | SQS FIFO |
+|---|---|---|
+| Where messages wait | A stream | A queue |
+| "I'm done" | `ack()` | `DeleteMessage` |
+| Redelivery after a crash | No ack before the ack wait time | The visibility timeout ends |
+| One writer for each order | A subject for each order (piece 15) | `MessageGroupId` = the order ID |
+| Messages that fail too often | A dead-letter subject (piece 14) | A dead-letter queue (`maxReceiveCount`) |
+
+**Interview answer.** "I put a small Queue interface in front of the broker. NATS JetStream backs it locally and SQS FIFO backs it on AWS, with the message group ID as the partition key, so one order is processed in order by one consumer."
+
+### Q10. Is each row update its own session, and can the session ID find duplicates? (Part 2, before piece 11)
+
+Asked 2026-10-21, before piece 11.
+
+**In this plan, yes, each row is its own session.** One message is one row, so the worker runs begin, set quantity and commit for that row. That costs 3 mutations (30 points) for each row. One session for each order with many lines costs fewer calls (begin and commit 1 time), but then one message must carry many rows. Part 3 can batch if the cost is too high.
+
+**The session ID can't find duplicates.** Shopify makes the session ID in `orderEditBegin`, inside the worker, after the message was sent. A redelivered message runs begin again and gets a new session ID. So 2 deliveries of the same row have 2 different session IDs. The ID must come from the row itself, before the message is sent: for example `<report file>:<row number>`. This is a **deduplication key** (or idempotency key). SQS FIFO uses it as `MessageDeduplicationId`, and NATS uses it as the `Nats-Msg-Id` header.
+
+**Interview answer.** "The idempotency key must be stable across retries, so it comes from the source record, not from anything the consumer generates. A server-generated session ID changes on every attempt."
+
+### Q11. What is happening in part 2? Explain it for a high school student. (Part 2, before piece 11)
+
+Asked 2026-10-21, before piece 11.
+
+Think of a busy diner kitchen.
+
+1. **The report is a stack of order slips.** Each slip is one row: "table 1001, item 8876963, make it 5."
+2. **The queue is the ticket rail.** The CLI puts every slip on the rail. Cooks take slips off the rail one at a time.
+3. **The worker is a cook.** The cook makes the change in Shopify (begin, set quantity, commit).
+4. **The ack is spiking the slip** on the "done" spike. Only then does the slip leave the kitchen.
+5. **Spike after cooking, not before.** If the cook spikes first and then trips, the slip is gone and the food never gets made. If the cook cooks first and trips before spiking, the slip goes back on the rail and another cook makes it again. A second plate is better than no plate.
+6. **"Make it 5", not "add 3".** If the slip is made 2 times, "make it 5" still gives 5. "Add 3" gives 6 extra. That is idempotency.
+7. **A number on each slip** (`report.csv:7`) lets the kitchen see "we already did slip 7". The cook's own receipt number can't do that, because it is new each time.
+8. **One cook for each table** (piece 15), so 2 cooks never change the same table's order at the same time.
+
+The message shape is the slip: `id` (the slip number), `orderId` (the table), `sku` (the item), `quantity` (make it this many).
+
+### Q12. Where does http://localhost:8222 come from? (Part 2, piece 12a)
+
+Asked 2026-10-21, after piece 12a.
+
+From 2 lines in `docker-compose.yml`:
+
+1. `-m 8222` in `command` turns on the NATS **monitoring server**, a small read-only HTTP server inside NATS.
+2. `"8222:8222"` in `ports` connects port 8222 on the laptop to port 8222 in the container.
+
+NATS uses 2 ports. **4222** is the client port: the code connects there with the NATS protocol, not HTTP. **8222** is for people and tools to look in, with HTTP and JSON. Useful pages:
+
+- `/healthz`: is the server up (piece 10)
+- `/jsz?streams=true`: the streams and their message counts (piece 12a)
+- `/connz`: the connected clients
+- `/varz`: the server settings and stats
+
+The monitoring port has no login, so it stays on localhost and is never open to the internet. Production systems read the same pages with Prometheus to make dashboards.
