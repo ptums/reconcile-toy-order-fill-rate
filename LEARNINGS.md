@@ -229,3 +229,74 @@ In `withThrottle`, each pass does 1 of 3 things:
 It does not "run all the time". It sleeps between tries, so it uses no CPU while it waits. Usually the second try works. If another client with the same token used the points in the meantime, it waits again.
 
 A correction to the first idea: `withThrottle` does not throttle. The **store** throttles (the leaky bucket from piece 8). `withThrottle` reacts: it reads the bucket numbers in the THROTTLED answer and waits only as long as necessary. Interview answer: "The server enforces the limit; the client respects it with a calculated backoff, not a fixed sleep."
+
+### Q15. Where does the `AWS_ACCESS_KEY_ID=local ... aws sqs list-queues` line go? (Part 4, piece 23)
+
+Asked 2026-10-21, at piece 23.
+
+In the terminal, as 1 command. It is not for a file. Run it from any folder, after `docker compose up -d`.
+
+`NAME=value` words before a command set environment variables **for that 1 command only**. When the command ends, they are gone, and the shell is the same as before. So:
+
+- `AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local`: fake keys. ElasticMQ accepts any keys. They also stop the CLI from using the real `reconciler` profile.
+- `AWS_REGION=us-east-2`: the AWS SDK and CLI need a Region, even for a local copy.
+- `--endpoint-url http://localhost:9324`: send the request to ElasticMQ on the laptop, not to AWS.
+
+The same idea comes back in the SQS adapter: the code reads `endpoint` and the keys from env vars, so only the env vars change between local and real AWS.
+
+### Q16. How does SQS tie into NATS and JetStream? (Part 4, piece 24)
+
+Asked 2026-10-21, at piece 24.
+
+Both are adapters for the same `Queue` interface (`queue/queue.ts`). The worker and the CLI only know the interface, so they do not change. `QUEUE=sqs` picks SQS; the default is NATS. This is the adapter pattern from part 2.
+
+| Idea | NATS JetStream (`nats.ts`) | SQS FIFO (`sqs.ts`) |
+|---|---|---|
+| Where messages live | Stream `ROWS`, WorkQueue retention | Queue `orders.fifo` |
+| Drop a double publish | `msgID`, 2-minute window | `MessageDeduplicationId`, 5-minute window |
+| Done | `ack()` | `DeleteMessage` |
+| Try again later | `nak(delayMs)` | `ChangeMessageVisibility` (seconds) |
+| No answer in 30 s: send again | `ack_wait` 30 s | visibility timeout 30 s |
+| Attempt number | `deliveryCount` | `ApproximateReceiveCount` |
+| Dead letter | Stream `DEAD` (the worker sends) | Queue `orders-dead.fifo` (the worker sends; redrive at 6 is the safety net) |
+| 1 writer per order | Built by hand: 3 partitions, `max_ack_pending: 1` | Built in: `MessageGroupId` = the order ID |
+
+The differences: JetStream is a log. It keeps messages in a stream, and with other retention it can replay them and serve many consumers. SQS is only a queue: a message is gone after the delete. NATS also does plain publish/subscribe and request/reply with no storage. SQS is managed by AWS, so there is no server to run. NATS needs a server (Docker here, or Synadia Cloud).
+
+Interview answer: "I put the queue behind an interface, built a NATS JetStream adapter first, then an SQS FIFO adapter. The worker didn't change. FIFO message groups gave me per-order ordering for free, where on JetStream I had to partition by hand."
+
+### Q17. Do NATS and SQS serve the same purpose? (Part 4, piece 24)
+
+Asked 2026-10-21, at piece 24.
+
+**In this project, yes.** Both are a work queue: hold 1 job per order, give it to 1 worker, delete it after the ack, send it again after a failure.
+
+**In general, no.** SQS does only that 1 job. NATS does many jobs in 1 server. On AWS, each of those jobs is a different service:
+
+| Job | NATS | AWS |
+|---|---|---|
+| Work queue | JetStream, WorkQueue retention | SQS |
+| Publish to many subscribers (fan-out) | Core NATS subjects | SNS, EventBridge |
+| A log you can replay | JetStream, Limits retention | Kinesis, MSK (Kafka) |
+| Request/reply between services | Core NATS request/reply | API Gateway + Lambda, or HTTP |
+| Key-value store | JetStream KV | DynamoDB, ElastiCache |
+| File store | JetStream Object Store | S3 |
+
+So the choice is: 1 flexible system that you run (NATS, or Synadia Cloud), or several managed AWS services that you join together. Inside AWS with a simple queue, SQS is less work. For edge devices, many regions, or messaging between services on more than 1 cloud, NATS fits better. This is the question for TWS-101.
+
+### Q18. Does it make sense to have both NATS and SQS? (Part 4, piece 24)
+
+Asked 2026-10-21, at piece 24.
+
+**In this project, yes.** It is a learning project. The 2 adapters prove the `Queue` interface works, and the build teaches both systems. That is the interview story.
+
+**In a real system, usually no, not for the same job.** 2 queue systems for 1 job means 2 things to run, watch, secure and pay for, and 2 sets of failure modes. Pick 1.
+
+When both make sense:
+
+- **Different jobs.** For example, NATS for fast messages between services or edge devices, and SQS for durable work inside AWS. Each tool does the job it is best at.
+- **A migration.** Move from one to the other over weeks, with both running for a short time. The interface makes that safer: switch 1 worker at a time.
+
+A trap: NATS on the laptop and SQS in production. Then tests don't run what production runs. That is why part 4 runs ElasticMQ locally: the same SQS API as AWS.
+
+Interview answer: "One queue per job. The interface lets me change the queue without touching the worker, which matters for a migration, not for running both forever."

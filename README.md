@@ -8,16 +8,16 @@ Linear ticket: TWS-77.
 
 ## Status
 
-Part 1 (the mock store) is done: queries, edit sessions, userErrors, the cost-based leaky bucket, and Vitest tests. Part 2 (the queue package) is done: a `Queue` interface with a NATS JetStream adapter, retries with a delay, a dead letter, and 1 writer per order. Part 3 (the CLI) is done: it reads the report, queues 1 message per order, and edits each order in 1 session, with throttle waits, retries and a summary. A second run changes nothing. 29 tests pass. Next: part 4, AWS services on local emulators. See `REQUIREMENTS.md` → "Where we stopped".
+Part 1 (the mock store) is done: queries, edit sessions, userErrors, the cost-based leaky bucket, and Vitest tests. Part 2 (the queue package) is done: a `Queue` interface with a NATS JetStream adapter, retries with a delay, a dead letter, and 1 writer per order. Part 3 (the CLI) is done: it reads the report, queues 1 message per order, and edits each order in 1 session, with throttle waits, retries and a summary. A second run changes nothing. 29 tests pass. Part 4 (AWS) is dropped. Next: the deliverables (baseline and results docs). See `REQUIREMENTS.md` → "Where we stopped".
 
 ## Build plan
 
-| Part | What                                                                                                    | Status |
-| ---- | ------------------------------------------------------------------------------------------------------- | ------ |
-| 1    | Mock API server (`mock-store/`): GraphQL Yoga on `node:http`, in the shape of the Shopify Admin API     | Done   |
-| 2    | Queue package (`queue/`): a `Queue` interface with a NATS JetStream adapter (local). SQS FIFO in part 4 | Done   |
-| 3    | CLI client: `reconcile.ts --file=<report>.csv`                                                          | Done   |
-| 4    | AWS services on local emulators (ElasticMQ, DynamoDB Local, S3Mock, SAM CLI). No AWS account needed     | To do  |
+| Part | What                                                                                                    | Status  |
+| ---- | ------------------------------------------------------------------------------------------------------- | ------- |
+| 1    | Mock API server (`mock-store/`): GraphQL Yoga on `node:http`, in the shape of the Shopify Admin API     | Done    |
+| 2    | Queue package (`queue/`): a `Queue` interface with a NATS JetStream adapter (local). SQS FIFO in part 4 | Done    |
+| 3    | CLI client: `reconcile.ts --file=<report>.csv`                                                          | Done    |
+| 4    | AWS services. Dropped (Peter, 2026-10-21): NATS is the only queue                                       | Dropped |
 
 ## Stack
 
@@ -26,7 +26,6 @@ Part 1 (the mock store) is done: queries, edit sessions, userErrors, the cost-ba
 - pnpm
 - GraphQL Yoga + `graphql`
 - NATS JetStream 2.11 in Docker (`@nats-io/transport-node`, `@nats-io/jetstream`)
-- AWS SDK v3 against local emulators (part 4)
 
 ## Run it
 
