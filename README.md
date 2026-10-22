@@ -109,13 +109,14 @@ The mock store loads its orders from `fixtures/sample-orders.anon.csv`: 2 orders
 
 ## Docs
 
-| File               | What                                                                 |
-| ------------------ | -------------------------------------------------------------------- |
-| `REQUIREMENTS.md`  | What we build, the full plan, and where we stopped                   |
-| `PROCESS.md`       | How the lessons work: one piece at a time, how work is checked       |
-| `LEARNINGS.md`     | Questions asked during the build, with answers and interview answers |
-| `SELF_LEARNING.md` | Mistakes made during the lessons, and the rules that prevent them    |
-| `CLAUDE.md`        | Instructions for Claude Code, including the AWS rules                |
+| File               | What                                                                         |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `REQUIREMENTS.md`  | What we build, the full plan, and where we stopped                           |
+| `docs/BASELINE.md` | The 2021 tool before the rebuild: how it works, speed, failures, code health |
+| `PROCESS.md`       | How the lessons work: one piece at a time, how work is checked               |
+| `LEARNINGS.md`     | Questions asked during the build, with answers and interview answers         |
+| `SELF_LEARNING.md` | Mistakes made during the lessons, and the rules that prevent them            |
+| `CLAUDE.md`        | Instructions for Claude Code, including the AWS rules                        |
 
 ## System design topics
 
