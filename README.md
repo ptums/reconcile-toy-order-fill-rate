@@ -112,5 +112,3 @@ I built it by hand, 1 small piece at a time, with Claude Code as a tutor: each p
 | [`CLAUDE.md`](CLAUDE.md)               | Instructions for Claude Code in this repo                       |
 
 The plan had a 4th part that swapped NATS for AWS SQS. I dropped it: both do the same job here, and NATS was the one I wanted to learn.
-
-Topics covered: cursor pagination, cost-based rate limiting, the N+1 problem, the schema as a contract (adapter pattern), idempotency, at-least-once delivery, per-order ordering with partitioned queues, and retries with backoff and jitter.
