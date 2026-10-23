@@ -32,26 +32,26 @@ function fakeDelivery(orderId: string, attempt = 1) {
 
 describe("handleDelivery", () => {
   it("acks after the work is done", async () => {
-    const { d, calls } = fakeDelivery("gid://shopify/Order/1002");
+    const { d, calls } = fakeDelivery("gid://toy-shop/Order/1002");
     const outcome = await handleDelivery(testGql(), d);
     expect(outcome.status).toBe("done");
     expect(calls).toEqual(["ack"]);
   });
 
   it("sends an unknown order to the dead letter at once", async () => {
-    const { d, calls } = fakeDelivery("gid://shopify/Order/9999");
+    const { d, calls } = fakeDelivery("gid://toy-shop/Order/9999");
     await handleDelivery(testGql(), d);
     expect(calls).toEqual(["dead Order does not exist"]);
   });
 
   it("naks a transient error with a backoff", async () => {
-    const { d, calls } = fakeDelivery("gid://shopify/Order/1002", 2);
+    const { d, calls } = fakeDelivery("gid://toy-shop/Order/1002", 2);
     await handleDelivery(downGql, d);
     expect(calls[0]).toMatch(/^nak \d+$/);
   });
 
   it("sends a transient error to the dead letter on the last attempt", async () => {
-    const { d, calls } = fakeDelivery("gid://shopify/Order/1002", 5);
+    const { d, calls } = fakeDelivery("gid://toy-shop/Order/1002", 5);
     await handleDelivery(downGql, d);
     expect(calls).toEqual(["dead fetch failed"]);
   });

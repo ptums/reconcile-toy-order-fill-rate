@@ -14,7 +14,7 @@ if (!values.file) {
 }
 const file = basename(values.file);
 
-// The store and the queue come from env vars, so the real Shopify API can replace the mock.
+// The store and the queue come from env vars, so the real Toy-Shop API can replace the mock.
 const STORE_URL = process.env.STORE_URL ?? "http://localhost:8001/graphql";
 const STORE_TOKEN = process.env.STORE_TOKEN ?? "local-dev";
 const NATS_URL = process.env.NATS_URL ?? "localhost:4222";

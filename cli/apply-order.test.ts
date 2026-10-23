@@ -5,7 +5,7 @@ import { withThrottle } from "./throttle.ts";
 import { applyOrder } from "./apply-order.ts";
 import { readReport } from "./report.ts";
 
-const ORDER = "gid://shopify/Order/1002";
+const ORDER = "gid://toy-shop/Order/1002";
 const REPORT = new URL("../fixtures/sample-orders.anon.csv", import.meta.url)
   .pathname;
 

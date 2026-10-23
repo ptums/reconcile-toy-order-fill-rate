@@ -8,7 +8,7 @@ Recorded: 2026-10-21. No client name, store or order data is on this page.
 
 - **After (run):** the rebuild on Node v22.22.3, against the mock store and local NATS JetStream 2.11, with the sample report: 339 lines in 2 orders, 108 of them with a new quantity.
 - **Before (calculated):** the 2021 tool reads a different CSV format, and a real run needs MongoDB and a real store. So the "before" numbers come from its code, for the same 339 rows. They are not from a run.
-- The mock store copies Shopify's cost rules: a bucket of 1,000 points that refills at 50 points per second, 10 points for a mutation, and `first` points for each connection.
+- The mock store copies Toy-Shop's cost rules: a bucket of 1,000 points that refills at 50 points per second, 10 points for a mutation, and `first` points for each connection.
 
 ## Before and after
 
@@ -43,6 +43,6 @@ The full run costs 1,622 points: 2 reads of 251 points, 2 begins, 108 quantity c
 ## What I would do next
 
 - **Wait before the bucket is empty.** Each answer has `throttleStatus`. The client could wait before a call that will not fit, instead of getting a `THROTTLED` answer first. That would remove the 38 `THROTTLED` answers, but the run would not be faster, because the bucket is the limit.
-- **Change many lines in 1 call.** Shopify lets 1 request hold several mutations. This would cut the number of requests, but not the points.
+- **Change many lines in 1 call.** Toy-Shop lets 1 request hold several mutations. This would cut the number of requests, but not the points.
 - **Orders with more than 250 lines.** The read uses `lineItems(first: 250)`. A larger order needs pagination.
 - **A separate worker.** The worker runs inside the CLI process. A separate worker needs a job status store, so the CLI can show progress.

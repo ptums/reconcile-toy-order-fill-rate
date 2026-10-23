@@ -6,7 +6,7 @@ Linear ticket: TWS-77. Written in ASD-STE100 style. See `PROCESS.md` for how the
 
 A supplier sends a fill-rate report (CSV). It shows how many pieces of each item the supplier shipped for each purchase order. When the supplier ships fewer pieces than ordered, the store order lines must change to the shipped quantity.
 
-This is a rebuild, from scratch, of a 2021 Node.js tool (`legacy/`). The rebuild is a learning project for system design. It does not use a real store: it uses a mock of a subset of the Shopify Admin GraphQL API.
+This is a rebuild, from scratch, of a 2021 Node.js tool (`legacy/`). The rebuild is a learning project for system design. It does not use a real store: it uses a mock of a subset of the Toy-Shop Admin GraphQL API.
 
 ## The report
 
@@ -25,7 +25,7 @@ This is a rebuild, from scratch, of a 2021 Node.js tool (`legacy/`). The rebuild
 
 ### Part 1. Mock API server (`mock-store/`)
 
-A GraphQL server that copies the shape of Shopify's Admin API. Stack: `node:http` + GraphQL Yoga. Port 8001. Run: `pnpm dev:mock`. GraphiQL: http://localhost:8001/graphql.
+A GraphQL server that copies the shape of Toy-Shop's Admin API. Stack: `node:http` + GraphQL Yoga. Port 8001. Run: `pnpm dev:mock`. GraphiQL: http://localhost:8001/graphql.
 
 | Piece | What                                                                                                                                                                                                                                                                                                                                                                                                   | Status |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
@@ -39,7 +39,7 @@ A GraphQL server that copies the shape of Shopify's Admin API. Stack: `node:http
 | 8     | Cost-based leaky bucket: query cost, `extensions.cost.throttleStatus`, `THROTTLED` error. One bucket for each access token. Decided 2026-10-19: lazy refill (a level and a timestamp, no timer); the server rejects at once with `THROTTLED` (holding requests is a bottleneck), and the client calculates its wait from `throttleStatus`                                                              | Done   |
 | 9     | Tests with Vitest. 9a: `createApp()` (in `app.ts`) builds a new store each call, so each test starts clean (test isolation). 9b: the first 2 tests with `app.fetch` (no port). 9c: bucket tests with a fixed clock (`now` as a parameter), a userError and `THROTTLED`. 9d: the other bad-input cases as a table-driven test (`it.each`) and the second commit. 12 tests pass (2026-10-21)             | Done   |
 
-Shopify facts checked on shopify.dev (2026-10-18): the example bucket is `maximumAvailable 1000`, `restoreRate 50`; a mutation costs 10; an object costs 1; a connection costs by `first`; one query can't cost more than 1,000.
+Toy-Shop facts checked against a real store API's docs (2026-10-18): the example bucket is `maximumAvailable 1000`, `restoreRate 50`; a mutation costs 10; an object costs 1; a connection costs by `first`; one query can't cost more than 1,000.
 
 ### Part 2. Queue package (`queue/`)
 
@@ -69,7 +69,7 @@ Pieces 10 to 15 used 1 message per row and small try scripts. Part 3 changed the
 
 ### Part 3. CLI client (`cli/`)
 
-Run: `pnpm reconcile --file=<report>.csv`. Env vars: `STORE_URL` (default `http://localhost:8001/graphql`), `STORE_TOKEN`, `NATS_URL` (default `localhost:4222`), so the real Shopify API can replace the mock.
+Run: `pnpm reconcile --file=<report>.csv`. Env vars: `STORE_URL` (default `http://localhost:8001/graphql`), `STORE_TOKEN`, `NATS_URL` (default `localhost:4222`), so the real Toy-Shop API can replace the mock.
 
 | Piece | What                                                                                                                                                                                                                             | Status |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -99,4 +99,4 @@ The AWS profile `reconciler` (Region `us-east-2`) and the budget `monthly-5-usd`
 
 ## Where we stopped
 
-Part 1, pieces 6 and 7 are done and verified (2026-10-19). Edit sessions work (begin, set quantity, commit), and 2 sessions on different lines of #1001 both apply (5 and 9). Bad input returns `userErrors` and changes nothing: an unknown order, an unknown session, a line not in the session, a negative quantity. A second commit of the same session gives a userError (the idempotency problem, for part 3). Piece 8 is done and verified (2026-10-19): each response has `extensions.cost` with `throttleStatus`, and a request that costs more than the bucket holds gets `THROTTLED` (HTTP 200, `actualQueryCost: null`). Piece 9a is done: the GraphQL app moved to `mock-store/app.ts` as `createApp()`, and `server.ts` only serves it. Piece 9 is done (2026-10-21): 12 Vitest tests pass with `pnpm test`, and part 1 is complete. Part 2 is done and verified (2026-10-21): pieces 10 to 15, run by Peter against local NATS. A throttled row retries 5 times and goes to the dead letter, a bad row goes there at once, and rows for order 1001 run in sequence while order 1002 runs in parallel. Part 3 is done and verified (2026-10-21): pieces 16 to 22, 29 Vitest tests. Peter ran `pnpm reconcile` against the mock and local NATS: run 1 changed 108 lines (#1001: 95, #1002: 13), and run 2 changed 0. In scratch, with the store stopped, each order retried with backoff and went to the dead letter on attempt 5. Part 4 (AWS) is dropped (Peter, 2026-10-21). The baseline doc is done (2026-10-21): `docs/BASELINE.md`. The results doc is done (2026-10-21): `docs/RESULTS.md` (12.5 s against about 89 minutes; 114 calls against 1,356). Next: **the proof pages** for the Shopify Order Automation card on tumulty.me.
+Part 1, pieces 6 and 7 are done and verified (2026-10-19). Edit sessions work (begin, set quantity, commit), and 2 sessions on different lines of #1001 both apply (5 and 9). Bad input returns `userErrors` and changes nothing: an unknown order, an unknown session, a line not in the session, a negative quantity. A second commit of the same session gives a userError (the idempotency problem, for part 3). Piece 8 is done and verified (2026-10-19): each response has `extensions.cost` with `throttleStatus`, and a request that costs more than the bucket holds gets `THROTTLED` (HTTP 200, `actualQueryCost: null`). Piece 9a is done: the GraphQL app moved to `mock-store/app.ts` as `createApp()`, and `server.ts` only serves it. Piece 9 is done (2026-10-21): 12 Vitest tests pass with `pnpm test`, and part 1 is complete. Part 2 is done and verified (2026-10-21): pieces 10 to 15, run by Peter against local NATS. A throttled row retries 5 times and goes to the dead letter, a bad row goes there at once, and rows for order 1001 run in sequence while order 1002 runs in parallel. Part 3 is done and verified (2026-10-21): pieces 16 to 22, 29 Vitest tests. Peter ran `pnpm reconcile` against the mock and local NATS: run 1 changed 108 lines (#1001: 95, #1002: 13), and run 2 changed 0. In scratch, with the store stopped, each order retried with backoff and went to the dead letter on attempt 5. Part 4 (AWS) is dropped (Peter, 2026-10-21). The baseline doc is done (2026-10-21): `docs/BASELINE.md`. The results doc is done (2026-10-21): `docs/RESULTS.md` (12.5 s against about 89 minutes; 114 calls against 1,356). Next: **the proof pages** for the order automation card on tumulty.me.

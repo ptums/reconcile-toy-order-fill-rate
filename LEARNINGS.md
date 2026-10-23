@@ -4,7 +4,7 @@ Peter's questions while he builds the reconciler from scratch in TypeScript, wit
 
 The build plan:
 
-1. The mock API server (a subset of the Shopify Admin GraphQL API)
+1. The mock API server (a subset of the Toy-Shop Admin GraphQL API)
 2. The queue package (NATS)
 3. The CLI client: `reconcile.ts --file=<report>.csv`
 4. The cloud infrastructure in AWS (aws cli)
@@ -15,11 +15,11 @@ The build plan:
 
 Asked 2026-10-18, before piece 5.
 
-1. **Pagination (connections).** `edges { node }` and `first` limit the size of each response. Order #1001 has 243 lines. Without a limit, one response can be very large. Shopify uses cursor pagination: each edge has a cursor, and the next page starts after it. Offset pagination (`page=3`) is simpler, but it skips or repeats items when data changes between pages.
-2. **The client chooses the work.** In GraphQL, the client decides how much data to ask for. `lineItems(first: 250)` costs the server more than `first: 2`. For this reason, Shopify gives each query a cost and rate-limits by cost, not by request count. The mock gets this later (the leaky bucket).
+1. **Pagination (connections).** `edges { node }` and `first` limit the size of each response. Order #1001 has 243 lines. Without a limit, one response can be very large. Toy-Shop uses cursor pagination: each edge has a cursor, and the next page starts after it. Offset pagination (`page=3`) is simpler, but it skips or repeats items when data changes between pages.
+2. **The client chooses the work.** In GraphQL, the client decides how much data to ask for. `lineItems(first: 250)` costs the server more than `first: 2`. For this reason, Toy-Shop gives each query a cost and rate-limits by cost, not by request count. The mock gets this later (the leaky bucket).
 3. **The N+1 problem.** `Order.lineItems` is a resolver for each order. With 50 orders and a database, that is 1 query for the orders plus 50 queries for the lines. The fix is batching: collect the 50 order IDs, then make 1 query (the DataLoader pattern). Here the data is in memory, so there is no cost.
 4. **Indexes.** `orders.filter(...)` reads every order (O(n)). With 2 orders, that is fine. With 1 million, use a `Map` keyed by name. That is the same idea as a database index: more memory, faster lookups.
-5. **The schema is a contract.** The mock copies Shopify's names and shapes. The client code then works with the real Shopify API by a change of URL and token. This is the adapter pattern, and contract tests check that the two sides agree.
+5. **The schema is a contract.** The mock copies Toy-Shop's names and shapes. The client code then works with the real Toy-Shop API by a change of URL and token. This is the adapter pattern, and contract tests check that the two sides agree.
 6. **In-memory state.** The orders live in the server's memory. A restart loads them again from the CSV (not durable), and two copies of the server have two different sets of orders (not shared). That is acceptable for a mock, but not for a real system of record.
 
 **Interview answer.** "GraphQL lets the client pick the shape and size of the response, so we bound lists with cursor pagination, price queries by cost for rate limiting, and batch nested resolvers to avoid N+1 queries."
@@ -34,7 +34,7 @@ Yes, with one more step. An edit has 3 calls, not 2:
 2. **`orderEditSetQuantity`** stages a change on the draft. You can call it many times, one time for each line. The real order does not change.
 3. **`orderEditCommit`** applies all the staged changes to the real order at once.
 
-Why Shopify uses this design:
+Why Toy-Shop uses this design:
 
 - **Atomicity (all or nothing).** 40 line changes become one change to the order. A failure in the middle leaves the order as it was, not half edited. This is the same idea as a database transaction (`BEGIN`, the writes, `COMMIT`).
 - **Preview.** The draft shows the new totals before anything is final.
@@ -42,9 +42,9 @@ Why Shopify uses this design:
 
 A TypeScript comparison: `git add` stages changes, and `git commit` applies them as one unit.
 
-**Interview answer.** "Shopify order edits are transactional: begin returns a draft, set-quantity stages changes on it, and commit applies them atomically, so a multi-line change is all or nothing and produces one update."
+**Interview answer.** "Toy-Shop order edits are transactional: begin returns a draft, set-quantity stages changes on it, and commit applies them atomically, so a multi-line change is all or nothing and produces one update."
 
-**Follow-up (Peter): "It is the same approach as git."** The full mapping: `orderEditBegin` is a fresh working copy, `orderEditSetQuantity` is an edit plus `git add`, and `orderEditCommit` is `git commit` and `git push` in one step. One difference: git rejects a push when someone else pushed first (you must pull and merge). Shopify does not check, so the last commit wins. Git uses optimistic concurrency control (detect the conflict at write time). Our mock does what Shopify does, and part 2 prevents the conflict instead: one writer for each order.
+**Follow-up (Peter): "It is the same approach as git."** The full mapping: `orderEditBegin` is a fresh working copy, `orderEditSetQuantity` is an edit plus `git add`, and `orderEditCommit` is `git commit` and `git push` in one step. One difference: git rejects a push when someone else pushed first (you must pull and merge). Toy-Shop does not check, so the last commit wins. Git uses optimistic concurrency control (detect the conflict at write time). Our mock does what Toy-Shop does, and part 2 prevents the conflict instead: one writer for each order.
 
 ### Q3. What is the common term for this process (begin, stage, commit)? (Part 1, piece 6a)
 
@@ -97,7 +97,7 @@ No. It goes **up to 88** (38 + 50). The bucket does not reset each second. It re
 
 Two different designs:
 
-| | Fixed window | Leaky bucket (Shopify) |
+| | Fixed window | Leaky bucket (Toy-Shop) |
 |---|---|---|
 | Rule | "50 points per second." A new second resets the count | "1,000 points, refilled at 50 per second" |
 | Unused points | Lost at the end of the second | Kept, up to 1,000 |
@@ -159,7 +159,7 @@ Asked 2026-10-21, before piece 11.
 
 **In this plan, yes, each row is its own session.** One message is one row, so the worker runs begin, set quantity and commit for that row. That costs 3 mutations (30 points) for each row. One session for each order with many lines costs fewer calls (begin and commit 1 time), but then one message must carry many rows. Part 3 can batch if the cost is too high.
 
-**The session ID can't find duplicates.** Shopify makes the session ID in `orderEditBegin`, inside the worker, after the message was sent. A redelivered message runs begin again and gets a new session ID. So 2 deliveries of the same row have 2 different session IDs. The ID must come from the row itself, before the message is sent: for example `<report file>:<row number>`. This is a **deduplication key** (or idempotency key). SQS FIFO uses it as `MessageDeduplicationId`, and NATS uses it as the `Nats-Msg-Id` header.
+**The session ID can't find duplicates.** Toy-Shop makes the session ID in `orderEditBegin`, inside the worker, after the message was sent. A redelivered message runs begin again and gets a new session ID. So 2 deliveries of the same row have 2 different session IDs. The ID must come from the row itself, before the message is sent: for example `<report file>:<row number>`. This is a **deduplication key** (or idempotency key). SQS FIFO uses it as `MessageDeduplicationId`, and NATS uses it as the `Nats-Msg-Id` header.
 
 **Interview answer.** "The idempotency key must be stable across retries, so it comes from the source record, not from anything the consumer generates. A server-generated session ID changes on every attempt."
 
@@ -171,7 +171,7 @@ Think of a busy diner kitchen.
 
 1. **The report is a stack of order slips.** Each slip is one row: "table 1001, item 8876963, make it 5."
 2. **The queue is the ticket rail.** The CLI puts every slip on the rail. Cooks take slips off the rail one at a time.
-3. **The worker is a cook.** The cook makes the change in Shopify (begin, set quantity, commit).
+3. **The worker is a cook.** The cook makes the change in Toy-Shop (begin, set quantity, commit).
 4. **The ack is spiking the slip** on the "done" spike. Only then does the slip leave the kitchen.
 5. **Spike after cooking, not before.** If the cook spikes first and then trips, the slip is gone and the food never gets made. If the cook cooks first and trips before spiking, the slip goes back on the rail and another cook makes it again. A second plate is better than no plate.
 6. **"Make it 5", not "add 3".** If the slip is made 2 times, "make it 5" still gives 5. "Add 3" gives 6 extra. That is idempotency.

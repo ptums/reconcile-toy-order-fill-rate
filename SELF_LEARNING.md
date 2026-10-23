@@ -5,7 +5,7 @@ Mistakes Claude made in this project, and the rule that prevents each one. Read 
 ## Rules
 
 1. **Check the file on disk before you say "it works".** Peter said "done" two times, but his editor had not saved the file. Read the file, run `tsc`, and send `curl` before the next piece. (2026-10-18)
-2. **Test each snippet before you give it.** The first `orders` resolver gave an empty list when the client sent no `query`. Real Shopify returns the first orders. Peter found the bug, not Claude. Run each snippet in a scratch copy, and test the edge cases (no argument, not found, many results). (2026-10-18)
+2. **Test each snippet before you give it.** The first `orders` resolver gave an empty list when the client sent no `query`. Real Toy-Shop returns the first orders. Peter found the bug, not Claude. Run each snippet in a scratch copy, and test the edge cases (no argument, not found, many results). (2026-10-18)
 3. **Give a complete `tsconfig.json` the first time.** It needed `skipLibCheck` and `include`, so `tsc` reported errors in `node_modules` and `tools/`. (2026-10-18)
 4. **Stop every process you start.** A test run left two servers on ports 8001 and 8002, and Peter got `EADDRINUSE`. `pkill` on the watcher did not stop its child process. Use a different port for your own tests, and check with `lsof` after you stop them. (2026-10-18)
 5. **Do not give Peter scripts.** Peter wants one command at a time, so he sees each step. Scripts hide the steps. (2026-10-18)

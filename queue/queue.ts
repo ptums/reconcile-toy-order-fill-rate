@@ -1,7 +1,7 @@
 // One report row, as one message. The worker needs nothing else to do the edit.
 export interface OrderMessage {
   id: string; // "<report file>:<order ID>". The same on every retry, so it finds duplicates
-  orderId: string; // "gid://shopify/Order/1001". Also the partition key
+  orderId: string; // "gid://toy-shop/Order/1001". Also the partition key
   lines: { sku: string; quantity: number }[]; // quantity: Pieces Shipped. Always absolute
 }
 

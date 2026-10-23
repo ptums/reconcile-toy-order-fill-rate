@@ -1,6 +1,6 @@
 # Baseline: the 2021 bulk order update tool (before the rebuild)
 
-This page records the state of the 2021 tool in `legacy/` before the rebuild. The tool reads a CSV of new quantities and changes the matching lines on store orders through the Shopify Admin GraphQL API.
+This page records the state of the 2021 tool in `legacy/` before the rebuild. The tool reads a CSV of new quantities and changes the matching lines on store orders through the Toy-Shop Admin GraphQL API.
 
 Recorded: 2026-10-21. No client name, store or order data is on this page.
 

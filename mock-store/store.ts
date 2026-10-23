@@ -34,14 +34,14 @@ export function loadOrders(): Order[] {
     if (!po || !row[col("Item")]) continue;
     const lines = byPo.get(po) ?? [];
     lines.push({
-      id: `gid://shopify/LineItem/${po}${lines.length + 1}`,
+      id: `gid://toy-shop/LineItem/${po}${lines.length + 1}`,
       sku: row[col("Item")]!,
       quantity: Number(row[col("Pieces Ordered")]),
     });
     byPo.set(po, lines);
   }
   return [...byPo].map(([po, lineItems]) => ({
-    id: `gid://shopify/Order/${po}`,
+    id: `gid://toy-shop/Order/${po}`,
     name: `#${po}`,
     lineItems,
   }));

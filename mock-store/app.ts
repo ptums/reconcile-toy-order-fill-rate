@@ -100,7 +100,7 @@ export function createApp() {
           };
         }
         const session: Session = {
-          id: `gid://shopify/CalculatedOrder/${nextSessionId++}`,
+          id: `gid://toy-shop/CalculatedOrder/${nextSessionId++}`,
           orderId: order.id,
           lineItems: order.lineItems.map((li) => ({ ...li })),
           changed: new Set(),
@@ -166,7 +166,7 @@ export function createApp() {
     onParams({ params, request, setResult }) {
       if (!params.query) return;
       const token =
-        request.headers.get("x-shopify-access-token") ?? "anonymous";
+        request.headers.get("x-toy-shop-access-token") ?? "anonymous";
       const cost = queryCost(params.query);
       const allowed = take(token, cost);
       const { available } = refill(token);

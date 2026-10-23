@@ -9,8 +9,8 @@ describe("readReport", () => {
 
   it("finds 2 orders and skips the total rows", () => {
     expect(orders.map((o) => [o.orderId, o.lines.length])).toEqual([
-      ["gid://shopify/Order/1001", 242],
-      ["gid://shopify/Order/1002", 97],
+      ["gid://toy-shop/Order/1001", 242],
+      ["gid://toy-shop/Order/1002", 97],
     ]);
   });
 

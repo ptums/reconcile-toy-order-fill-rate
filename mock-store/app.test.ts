@@ -11,8 +11,8 @@ async function gql(app: ReturnType<typeof createApp>, query: string) {
   return res.json();
 }
 
-const ORDER = "gid://shopify/Order/1001";
-const LINE = "gid://shopify/LineItem/10011";
+const ORDER = "gid://toy-shop/Order/1001";
+const LINE = "gid://toy-shop/LineItem/10011";
 
 describe("edit sessions", () => {
   it("test 1: a commit changes line 10011 to 5", async () => {
@@ -84,21 +84,21 @@ describe("bad input", () => {
   it.each([
     {
       name: "unknown order",
-      mutation: `mutation { orderEditBegin(id: "gid://shopify/Order/9999") { userErrors {
+      mutation: `mutation { orderEditBegin(id: "gid://toy-shop/Order/9999") { userErrors {
   field message } } }`,
       field: "orderEditBegin",
       error: { field: ["id"], message: "Order does not exist" },
     },
     {
       name: "unknown session",
-      mutation: `mutation { orderEditSetQuantity(id: "gid://shopify/CalculatedOrder/9999",
+      mutation: `mutation { orderEditSetQuantity(id: "gid://toy-shop/CalculatedOrder/9999",
   lineItemId: "${LINE}", quantity: 5) { userErrors { field message } } }`,
       field: "orderEditSetQuantity",
       error: { field: ["id"], message: "Calculated order does not exist" },
     },
     {
       name: "unknown session on commit",
-      mutation: `mutation { orderEditCommit(id: "gid://shopify/CalculatedOrder/9999") {
+      mutation: `mutation { orderEditCommit(id: "gid://toy-shop/CalculatedOrder/9999") {
   userErrors { field message } } }`,
       field: "orderEditCommit",
       error: { field: ["id"], message: "Calculated order does not exist" },
@@ -120,7 +120,7 @@ describe("bad input", () => {
     const set = await gql(
       app,
       `mutation { orderEditSetQuantity(id: "${session}",
-  lineItemId: "gid://shopify/LineItem/99991", quantity: 5) { userErrors { field message } }
+  lineItemId: "gid://toy-shop/LineItem/99991", quantity: 5) { userErrors { field message } }
   }`,
     );
     expect(set.data.orderEditSetQuantity.userErrors).toEqual([

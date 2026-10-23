@@ -1,64 +1,68 @@
-# Reconcile: store orders vs supplier fill-rate report
+# Reconcile: fix store orders from a supplier's fill-rate report
 
-A supplier sends a fill-rate report (CSV). It shows how many pieces of each item the supplier shipped for each purchase order. When the supplier ships fewer pieces than ordered, the store order lines must change to the shipped quantity.
+When a supplier can't ship everything on a purchase order, it sends a fill-rate report: a CSV that lists how many pieces of each item actually shipped. Someone then has to change every store order to match. This tool does that change for you.
 
-This project does that change automatically. It is a from-scratch TypeScript rebuild of a 2021 Node.js tool (`legacy/`), and a learning project for system design. It runs against a mock of a subset of the Shopify Admin GraphQL API, not a real store.
+It's a from-scratch TypeScript rebuild of a Node.js tool I wrote in 2021 (kept in `legacy/` for comparison). I rebuilt it to learn backend system design by doing: queues, rate limits, retries, and making a rerun safe. It runs against a local mock of part of the Toy-Shop Admin GraphQL API, so you don't need a real store to try it.
 
-Linear ticket: TWS-77.
+## The results
 
-## Status
+For the same 339-row report:
 
-Part 1 (the mock store) is done: queries, edit sessions, userErrors, the cost-based leaky bucket, and Vitest tests. Part 2 (the queue package) is done: a `Queue` interface with a NATS JetStream adapter, retries with a delay, a dead letter, and 1 writer per order. Part 3 (the CLI) is done: it reads the report, queues 1 message per order, and edits each order in 1 session, with throttle waits, retries and a summary. A second run changes nothing. 29 tests pass. Part 4 (AWS) is dropped. Next: the deliverables (baseline and results docs). See `REQUIREMENTS.md` → "Where we stopped".
+|               | 2021 tool                  | This rebuild                        |
+| ------------- | -------------------------- | ----------------------------------- |
+| Time          | About 89 minutes of sleeps | 12.5 seconds                        |
+| API calls     | 1,356                      | 114 (plus 38 free `THROTTLED`)      |
+| Lines written | 339 (every row)            | 108 (only the ones that change)     |
+| Run it again  | Writes all 339 rows again  | Writes nothing                      |
+| A failure     | "Please update manually"   | Retried, or set aside with a reason |
+| Tests         | 1 of 4 passing             | 29 passing                          |
 
-## Build plan
+12.5 seconds is as fast as the store's rate limit allows. The full numbers and how they were measured are in [`docs/RESULTS.md`](docs/RESULTS.md). The state of the old tool is in [`docs/BASELINE.md`](docs/BASELINE.md).
 
-| Part | What                                                                                                    | Status  |
-| ---- | ------------------------------------------------------------------------------------------------------- | ------- |
-| 1    | Mock API server (`mock-store/`): GraphQL Yoga on `node:http`, in the shape of the Shopify Admin API     | Done    |
-| 2    | Queue package (`queue/`): a `Queue` interface with a NATS JetStream adapter (local). SQS FIFO in part 4 | Done    |
-| 3    | CLI client: `reconcile.ts --file=<report>.csv`                                                          | Done    |
-| 4    | AWS services. Dropped (Peter, 2026-10-21): NATS is the only queue                                       | Dropped |
+## How it works
 
-## Stack
+```text
+fill-rate CSV ──> CLI ──> NATS JetStream ──> worker ──> store (GraphQL)
+                  1 message     3 partitions,       read, diff,
+                  per order     1 order at a time   edit, commit
+                                     │
+                                     └──> DEAD stream (orders that can't be fixed)
+```
 
-- TypeScript on Node 22, ESM
-- `tsx` to run (no build step), `tsc` (`noEmit`) to check types
-- pnpm
-- GraphQL Yoga + `graphql`
-- NATS JetStream 2.11 in Docker (`@nats-io/transport-node`, `@nats-io/jetstream`)
+1. The CLI reads the report and groups the rows by purchase order.
+2. It puts 1 message per order on a queue (NATS JetStream).
+3. A worker takes each order, reads it from the store, and compares it with the report.
+4. Only the lines that changed get written, all in 1 edit session per order.
+5. The message is acknowledged only after the edit is committed.
 
-## Run it
+A few design choices worth knowing:
+
+- **Safe to rerun.** Quantities are absolute ("set to 4"), not relative ("subtract 2"), and the worker diffs before it writes. A second run finds nothing to change.
+- **Waits only as long as it needs.** The store uses a leaky-bucket rate limit (1,000 points, refilling at 50 a second). When the store says `THROTTLED`, the client works out the exact wait instead of sleeping a fixed time.
+- **1 writer per order.** Orders are split into 3 partitions, and each partition handles 1 message at a time. Two updates to the same order never race.
+- **Failures end somewhere.** Network or server errors retry with backoff and jitter (up to 5 attempts). An order that doesn't exist goes straight to a dead-letter stream with the reason. Nothing hangs.
+
+## Try it
+
+You need Node 22, pnpm and Docker.
 
 ```sh
 pnpm install
-pnpm dev:mock
+pnpm dev:mock          # the mock store on http://localhost:8001 (set PORT to change it)
+docker compose up -d   # NATS JetStream on port 4222
+pnpm reconcile --file=fixtures/sample-orders.anon.csv
 ```
 
-The mock store starts on port 8001 (set `PORT` to change it).
+The first run changes 108 lines across 2 orders. Run it again and it changes 0.
 
-- Health check: `curl http://localhost:8001/health` → `{"status":"ok"}`
-- GraphiQL: http://localhost:8001/graphql
-- Tests: `pnpm test` (Vitest, no server needed)
+Other useful commands:
 
-Start the local queue (NATS in Docker):
+- `pnpm test` runs the Vitest tests. No servers needed.
+- `pnpm exec tsc` checks types. No output means no errors.
+- `docker compose down -v` stops NATS and deletes the stored messages.
+- GraphiQL for the mock store is at http://localhost:8001/graphql, and NATS monitoring is at http://localhost:8222.
 
-```sh
-docker compose up -d
-```
-
-- Clients: port 4222. Monitoring: http://localhost:8222 (`/healthz`, `/jsz?streams=true`)
-- Reconcile the sample report (with the mock and NATS running): `pnpm reconcile --file=fixtures/sample-orders.anon.csv`
-- Stop it: `docker compose down` (add `-v` to delete the stored messages)
-
-Check types:
-
-```sh
-pnpm exec tsc
-```
-
-No output means no type errors.
-
-## Try a query
+The sample report is anonymized: 2 orders, `#1001` (242 lines) and `#1002` (97 lines). Try this query in GraphiQL:
 
 ```graphql
 {
@@ -82,43 +86,31 @@ No output means no type errors.
 }
 ```
 
-The mock store loads its orders from `fixtures/sample-orders.anon.csv`: 2 orders, `#1001` (242 lines) and `#1002` (97 lines). With no `query`, `orders` returns all orders up to `first`.
+## What's inside
 
-## Repo layout
+| Path          | What                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| `mock-store/` | The mock store: GraphQL Yoga, order edit sessions, `userErrors`, and the cost-based rate limit |
+| `queue/`      | A small `Queue` interface and its NATS JetStream adapter: partitions, retries, dead letter     |
+| `cli/`        | The report reader, store client, throttle, order editor, worker and the CLI itself             |
+| `fixtures/`   | The anonymized sample report                                                                   |
+| `legacy/`     | The 2021 tool, unchanged, for comparison                                                       |
+| `tools/`      | The script that made the anonymized fixture                                                    |
 
-| Path                        | What                                                                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `mock-store/server.ts`      | HTTP server on port 8001, with `GET /health`                                                                                   |
-| `mock-store/app.ts`         | `createApp()`: the GraphQL schema, the resolvers and the cost plugin, with new state for each call                             |
-| `mock-store/bucket.ts`      | The leaky bucket: lazy refill, one bucket for each access token                                                                |
-| `mock-store/cost.ts`        | The query cost: 10 for a mutation, plus `first` for each connection                                                            |
-| `mock-store/*.test.ts`      | Vitest tests. Each test calls `createApp()` and sends requests with `app.fetch`, with no port. Bucket tests pass a fixed `now` |
-| `mock-store/store.ts`       | Loads the orders from the CSV report                                                                                           |
-| `queue/queue.ts`            | The `Queue` interface: `OrderMessage`, `Delivery`, `MAX_ATTEMPTS`                                                              |
-| `queue/nats.ts`             | The NATS JetStream adapter: streams `ROWS` and `DEAD`, 3 partitions with 1 message at a time each                              |
-| `cli/report.ts`             | Reads the report: 1 order per PO, with Pieces Shipped as the quantity                                                          |
-| `cli/store-client.ts`       | `gql()` for 1 store, with plain `fetch`                                                                                        |
-| `cli/throttle.ts`           | Waits on THROTTLED only as long as the bucket needs                                                                            |
-| `cli/apply-order.ts`        | Edits 1 order: read, diff, begin, set the changed lines, commit                                                                |
-| `cli/worker.ts`             | Handles 1 delivery: ack, nak with backoff and jitter, or dead letter                                                           |
-| `cli/reconcile.ts`          | The CLI: publishes 1 message per order, runs the worker, prints the summary                                                    |
-| `docker-compose.yml`        | Local NATS 2.11 with JetStream                                                                                                 |
-| `fixtures/`                 | The anonymized sample report. Do not change                                                                                    |
-| `legacy/`                   | The 2021 Node.js tool, for reference. Do not change                                                                            |
-| `tools/anonymize-sample.ts` | Made the anonymized fixture from a real report (needs its own setup)                                                           |
+Stack: TypeScript on Node 22 (ESM), `tsx`, pnpm, GraphQL Yoga, NATS JetStream 2.11 in Docker, and Vitest.
 
-## Docs
+## How it was built
 
-| File               | What                                                                         |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `REQUIREMENTS.md`  | What we build, the full plan, and where we stopped                           |
-| `docs/BASELINE.md` | The 2021 tool before the rebuild: how it works, speed, failures, code health |
-| `docs/RESULTS.md`  | The rebuild against the 2021 tool: speed, API calls, reruns, failure tests   |
-| `PROCESS.md`       | How the lessons work: one piece at a time, how work is checked               |
-| `LEARNINGS.md`     | Questions asked during the build, with answers and interview answers         |
-| `SELF_LEARNING.md` | Mistakes made during the lessons, and the rules that prevent them            |
-| `CLAUDE.md`        | Instructions for Claude Code, including the AWS rules                        |
+I built it by hand, 1 small piece at a time, with Claude Code as a tutor: each piece was explained, tested in a scratch folder first, and then I wrote it. These files keep that record:
 
-## System design topics
+| File                                   | What                                                            |
+| -------------------------------------- | --------------------------------------------------------------- |
+| [`REQUIREMENTS.md`](REQUIREMENTS.md)   | The plan, each part, and the decisions made along the way       |
+| [`LEARNINGS.md`](LEARNINGS.md)         | The questions I asked during the build, with the answers        |
+| [`PROCESS.md`](PROCESS.md)             | How the lessons worked                                          |
+| [`SELF_LEARNING.md`](SELF_LEARNING.md) | Mistakes made during the lessons, and the rules that fixed them |
+| [`CLAUDE.md`](CLAUDE.md)               | Instructions for Claude Code in this repo                       |
 
-Pagination (cursors vs offsets), cost-based rate limiting (leaky bucket), the N+1 problem, indexes, the schema as a contract (adapter pattern), idempotency, at-least-once delivery, per-order ordering with partitioned queues, and retries with backoff and jitter.
+The plan had a 4th part that swapped NATS for AWS SQS. I dropped it: both do the same job here, and NATS was the one I wanted to learn.
+
+Topics covered: cursor pagination, cost-based rate limiting, the N+1 problem, the schema as a contract (adapter pattern), idempotency, at-least-once delivery, per-order ordering with partitioned queues, and retries with backoff and jitter.

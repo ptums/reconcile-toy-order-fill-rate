@@ -26,7 +26,7 @@ export function storeClient(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-shopify-access-token": token,
+        "x-toy-shop-access-token": token,
       },
       body: JSON.stringify({ query }),
     });
