@@ -1,6 +1,6 @@
 # Reconcile: fix store orders from a supplier's fill-rate report
 
-When a supplier can't ship everything on a purchase order, it sends a fill-rate report: a CSV that lists how many pieces of each item actually shipped. Someone then has to change every store order to match. This tool does that change for you.
+A supplier wanted a way to automate updating order quantities from the many CSV spreadsheets they receive each week. Their process was to go into their store management system and update each order by hand. This program automates that process, but it isn't straightforward. The store management system has a strict update policy that prevents bulk updates, so we needed another approach.
 
 It's a from-scratch TypeScript rebuild of a Node.js tool I wrote in 2021 (kept in `legacy/` for comparison). I rebuilt it to learn backend system design by doing: queues, rate limits, retries, and making a rerun safe. It runs against a local mock of part of the Toy-Shop Admin GraphQL API, so you don't need a real store to try it.
 
